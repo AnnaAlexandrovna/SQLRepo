@@ -1,0 +1,346 @@
+--1. Выбрать клиентов, у которых были заказы в июле 1999 года. Упорядочить по коду
+--клиента. Использовать внутреннее соединение (inner join) и distinct.
+
+SELECT DISTINCT *
+FROM
+    customers   cus
+    JOIN orders      o ON o.customer_id = cus.customer_id
+                     AND TO_DATE('19990701', 'yyyymmdd') <= o.order_date
+                     AND o.order_date < TO_DATE('19990801', 'yyyymmdd')
+ORDER BY
+    cus.customer_id;
+
+--2. Выбрать всех клиентов и сумму их заказов за 2000 год, упорядочив их по сумме заказов
+--(клиенты, у которых вообще не было заказов за 2000 год, вывести в конце), затем по ID
+--заказчика. Вывести поля: код заказчика, имя заказчика (фамилия + имя через пробел),
+--сумма заказов за 2000 год. Использовать внешнее соединение (left join) таблицы
+--заказчиков с подзапросом для выбора суммы товаров (по таблице заказов) по клиентам
+--за 2000 год.
+
+SELECT
+    cus.customer_id,
+    cus.cust_last_name || ( ' ' ) || cus.cust_first_name name,
+    SUM(o.order_total) order_sum
+FROM
+    customers   cus
+    LEFT JOIN orders      o ON o.customer_id = cus.customer_id
+                          AND TO_DATE('20000101', 'yyyymmdd') <= o.order_date
+                          AND o.order_date < TO_DATE('20010101', 'yyyymmdd')
+GROUP BY
+    cus.customer_id,
+    cus.cust_last_name || ( ' ' ) || cus.cust_first_name
+ORDER BY
+    order_sum DESC NULLS LAST,
+    cus.customer_id;
+
+
+--3. Выбрать сотрудников, которые работают на первой своей должности (нет записей в
+--истории). Использовать внешнее соединение (какое конкретно?) с таблицей истории, а
+--затем отбор записей из таблицы сотрудников таких, для которых не «подцепилось»
+--строк из таблицы истории. Упорядочить отобранных сотрудников по дате приема на
+--работу (в обратном порядке, затем по коду сотрудника (в обычном порядке).
+
+SELECT
+    emp.*
+FROM
+    employees     emp
+    LEFT JOIN job_history   jh ON jh.employee_id = emp.employee_id
+WHERE
+    jh.employee_id IS NULL
+ORDER BY
+    emp.hire_date DESC,
+    emp.employee_id;
+
+--4. Выбрать все склады, упорядочив их по количеству номенклатуры товаров,
+--представленных в них. Вывести поля: код склада, название склада, количество
+--различных товаров на складе. Упорядочить по количеству номенклатуры товаров на
+--складе (от большего количества к меньшему), затем по коду склада (в обычном
+--порядке). Склады, для которых нет информации о товарах на складе, вывести в конце.
+--Подзапросы не использовать.
+
+SELECT
+    w.warehouse_id,
+    w.warehouse_name,
+    COUNT(*) AS p_count
+FROM
+    warehouses    w
+    JOIN inventories   i ON i.warehouse_id = w.warehouse_id
+GROUP BY
+    w.warehouse_id,
+    w.warehouse_name
+ORDER BY
+    p_count DESC NULLS LAST;
+
+--5.Выбрать сотрудников, которые работают в США. Упорядочить по коду сотрудника.
+--Ответ: 68 строк.
+
+SELECT
+    emp.*
+FROM
+    employees     emp
+    JOIN departments   dep ON emp.department_id = dep.department_id
+    JOIN locations     loc ON loc.location_id = dep.location_id
+                          AND loc.country_id = 'US'
+ORDER BY
+    emp.employee_id;
+
+--6.Выбрать все товары и их описание на русском языке.
+--Вывести поля: код товара, название товара, цена товара в каталоге (LIST_PRICE), описание товара на русском языке. 
+--Если описания товара на русском языке нет, в поле описания вывести «Нет описания», воспользовавшись функцией nvl или выражением case
+--(в учебной базе данных для всех товаров есть описания на русском языке, однако запрос должен быть написан в предположении, 
+--что описания на русском языке может и не быть; для проверки запроса можно указать код несуществующего языка и проверить, появилось ли в поле описания соответствующий комментарий). 
+--Упорядочить по коду категории товара, затем по коду товара.
+
+SELECT
+    pd.product_id,
+    pd.translated_name,
+    pi.list_price,
+    CASE
+        WHEN pd.language_id = 'RU' THEN
+            pd.translated_description
+        ELSE
+            to_nchar('Нет описания')
+    END ru_desc
+FROM
+    product_descriptions   pd
+    JOIN product_information    pi ON pi.product_id = pd.product_id
+                                   AND pd.language_id = 'RU'
+ORDER BY
+    pi.category_id,
+    pd.product_id;
+
+--7.Выбрать товары, которые никогда не продавались. 
+--Вывести поля: код товара, название товара, цена товара в каталоге (LIST_PRICE), название товара на русском языке (запрос должен быть написан в предположении, 
+--что описания товара на русском языке может и не быть). Упорядочить по цене товара в обратном порядке (товары, для которых не указана цена, вывести в конце), затем по коду товара.
+
+SELECT
+    pd.product_id,
+    pi.product_name,
+    pi.list_price,
+    CASE
+        WHEN pd.language_id = 'RU' THEN
+            pd.translated_description
+        ELSE
+            to_nchar('Нет описания')
+    END ru_desc
+FROM
+    product_descriptions   pd
+    JOIN product_information    pi ON pi.product_id = pd.product_id
+                                   AND pd.language_id = 'RU'
+    LEFT JOIN order_items            oi ON oi.product_id = pi.product_id
+WHERE
+    oi.order_id IS NULL
+ORDER BY
+    pi.list_price DESC NULLS LAST,
+    pd.product_id
+;
+
+
+--8.Выбрать клиентов, у которых есть заказы на сумму больше, чем в 2 раза превышающую среднюю цену заказа.
+--Вывести поля: код клиента, название клиента (фамилия + имя через пробел), количество таких заказов, максимальная сумма заказа. 
+--Упорядочить по количеству таких заказов в обратном порядке, затем по коду клиента.
+--Ответ: 13 строк.
+
+SELECT DISTINCT
+    cus.customer_id,
+    cus.cust_last_name || ( ' ' ) || cus.cust_first_name name,
+    COUNT(*) OVER(PARTITION BY o.customer_id ) large_sum_orders_count,
+    MAX(o.order_total) OVER(PARTITION BY o.customer_id) AS max_order_sum
+FROM
+    customers cus
+    JOIN orders o ON o.customer_id = cus.customer_id AND 
+    o.order_total > (
+        SELECT round(AVG(o.order_total))
+        FROM orders o
+    ) * 2
+ORDER BY
+    large_sum_orders_count desc,
+    cus.customer_id;
+
+
+--9.Упорядочить клиентов по сумме заказов за 2000 год. Вывести поля: код клиента, имя клиента (фамилия + имя через пробел), сумма заказов за 2000 год. 
+--Упорядочить данные по сумме заказов за 2000 год в обратном порядке, затем по коду клиента. Клиенты, у которых не было заказов в 2000, вывести в конце.
+--Ответ: 319 строк.
+
+
+SELECT DISTINCT
+    cus.customer_id,
+    cus.cust_last_name || ( ' ' ) || cus.cust_first_name name,
+    SUM(o.order_total) OVER( PARTITION BY o.customer_id) AS sum
+FROM
+    customers   cus
+    LEFT JOIN orders      o ON o.customer_id = cus.customer_id
+                          AND TO_DATE('20000101', 'yyyymmdd') <= o.order_date
+                          AND o.order_date < TO_DATE('20010101', 'yyyymmdd')
+ORDER BY
+    sum DESC NULLS LAST,
+    cus.customer_id;
+
+
+--10.Переписать предыдущий запрос так, чтобы не выводить клиентов, у которых вообще не было заказов.
+--Ответ: 16 строк.
+
+
+SELECT DISTINCT
+    cus.customer_id,
+    cus.cust_last_name || ( ' ' ) || cus.cust_first_name name,
+    SUM(o.order_total) OVER( PARTITION BY o.customer_id) AS sum
+FROM
+    customers   cus
+    JOIN orders      o ON o.customer_id = cus.customer_id
+                     AND TO_DATE('20000101', 'yyyymmdd') <= o.order_date
+                     AND o.order_date < TO_DATE('20010101', 'yyyymmdd')
+ORDER BY
+    sum DESC,
+    cus.customer_id;
+
+--11.Каждому менеджеру по продажам сопоставить последний его заказ. Менеджера по продажам считаем сотрудников, код должности которых: «SA_MAN» и «SA_REP». 
+--Вывести поля: код менеджера, имя менеджера (фамилия + имя через пробел), код клиента, имя клиента (фамилия + имя через пробел), дата заказа, сумма заказа, 
+--количество различных позиций в заказе. Упорядочить данные по дате заказа в обратном порядке, затем по сумме заказа в обратном порядке, затем по коду сотрудника. 
+--Тех менеджеров, у которых нет заказов, вывести в конце.
+--Ответ: 35 строк.
+
+SELECT
+    t.m_id,
+    emp.last_name || ( ' ' ) || emp.first_name AS name,
+    emp1.employee_id AS cus_id,
+    DECODE(
+    t.max_date,
+    NULL, NULL,
+    emp1.last_name || ( ' ' ) || emp1.first_name) AS cus_name,
+    t.max_date,
+    o.order_total,
+    DECODE(
+    t.max_date,
+    NULL, NULL,
+    COUNT(o.order_total)) count_pos
+FROM
+    ( SELECT m_id,
+            MAX(o.order_date) max_date
+        FROM
+            (  SELECT emp.employee_id m_id
+                FROM employees emp
+                WHERE emp.job_id = 'SA_MAN' OR emp.job_id = 'SA_REP'
+            ) s_info
+            LEFT JOIN orders o ON o.sales_rep_id = s_info.m_id
+        GROUP BY m_id
+    ) t
+    JOIN employees     emp ON t.m_id = emp.employee_id
+    LEFT JOIN orders        o ON o.sales_rep_id = t.m_id
+                          AND o.order_date = t.max_date
+    LEFT JOIN employees     emp1 ON emp1.employee_id = o.customer_id
+    LEFT JOIN order_items   o_i ON o.order_id = o_i.order_id
+GROUP BY
+    t.m_id,
+    emp.last_name || ( ' ' ) || emp.first_name,
+    emp1.employee_id,
+    emp1.last_name || ( ' ' ) || emp1.first_name,
+    t.max_date,
+    o.order_total
+ORDER BY
+    max_date DESC NULLS LAST;
+
+
+--12.Проверить, были ли заказы, в которых товары поставлялись со скидкой. 
+--Считаем, что скидка была, если сумма заказа меньше суммы стоимости всех позиций в заказе, если цены товаров смотреть в каталоге (прайсе). 
+--Если такие заказы были, то вывести максимальный процент скидки среди всех таких заказов, округленный до 2 знаков после запятой.
+--Ответ: 1 строка (1 число).
+
+SELECT MAX(round(((100 - o.order_total /(list_price.sum1 / 100))), 2)) max_discount
+FROM
+    (
+        SELECT o.order_id,
+            SUM(pi.list_price * oi.quantity) sum1
+        FROM
+            orders                o
+            LEFT JOIN order_items           oi ON o.order_id = oi.order_id
+            LEFT JOIN product_information   pi ON pi.product_id = oi.product_id
+        GROUP BY
+            o.order_id
+    ) list_price
+    JOIN orders o ON o.order_id = list_price.order_id;
+
+
+--13.Выбрать товары, которые есть только на одном складе. Вывести поля: код товара, название товара, цена товара по каталогу (LIST_PRICE), 
+--код и название склада, на котором есть данный товар, страна, в которой находится данный склад. 
+--Упорядочить данные по названию стране, затем по коду склада, затем по названию товара.
+--Ответ: 12 строк.
+SELECT
+    inv_info.product_id,
+    pi.product_name,
+    pi.list_price,
+    w.warehouse_id,
+    w.warehouse_name,
+    cont.country_name
+FROM
+    (
+        SELECT inv.product_id,
+            COUNT(*) w_c
+        FROM inventories inv
+        GROUP BY inv.product_id
+    ) inv_info
+    JOIN product_information   pi ON pi.product_id = inv_info.product_id
+                                   AND inv_info.w_c = 1
+    JOIN inventories           inv ON inv.product_id = inv_info.product_id
+    JOIN warehouses            w ON w.warehouse_id = inv.warehouse_id
+    JOIN locations             loc ON w.location_id = loc.location_id
+    JOIN countries             cont ON cont.country_id = loc.country_id;
+
+
+--14.Для всех стран вывести количество клиентов, которые находятся в данной стране.
+--Вывести поля: код страны, название страны, количество клиентов. 
+--Для стран, в которых нет клиентов, в качестве количества клиентов вывести 0.
+--Упорядочить по количеству клиентов в обратном порядке, затем по названию страны.
+--Ответ: 25 строк.
+
+
+SELECT con.country_id,
+    con.country_name,
+    decode(count_cust.c, NULL, 0, count_cust.c) cust_count
+FROM
+    (
+        SELECT
+            cont.country_id,
+            COUNT(cont.country_id) c
+        FROM
+            countries   cont
+            JOIN customers   cus ON cus.cust_address_country_id = cont.country_id
+        GROUP BY
+            cont.country_id
+    ) count_cust
+    RIGHT JOIN countries con ON con.country_id = count_cust.country_id
+ORDER BY
+    cust_count DESC,
+    con.country_name;
+
+
+--15.Для каждого клиента выбрать минимальный интервал (количество дней) между его заказами.
+--Интервал между заказами считать как разницу в днях между датами 2-х заказов без учета времени заказа. 
+--Вывести поля: код клиента, имя клиента (фамилия + имя через пробел), даты заказов с минимальным интервалом (время не отбрасывать), интервал в днях между этими заказами.
+--Если у клиента заказов нет или заказ один за всю историю, то таких клиентов не выводить. Упорядочить по коду клиента.
+--Ответ: 18 строк.
+
+SELECT
+    o.customer_id,
+    cus.cust_last_name || ( ' ' ) || cus.cust_first_name cust_name,
+    o.order_date1,
+    o.order_date,
+    o.min_period_between_orders
+FROM
+    (
+        SELECT
+            o.*,
+            MIN(trunc(o.order_date) - trunc(o.order_date1)) OVER(PARTITION BY o.customer_id) AS min_period_between_orders
+        FROM
+            (
+                SELECT
+                    o.customer_id,
+                    o.order_date,
+                    LAG(o.order_date) OVER(PARTITION BY o.customer_id ORDER BY o.order_date) AS order_date1
+                FROM
+                    orders o
+            ) o
+    ) o
+    JOIN customers cus ON cus.customer_id = o.customer_id
+                          AND trunc(o.order_date) - trunc(o.order_date1) = o.min_period_between_orders;
+
